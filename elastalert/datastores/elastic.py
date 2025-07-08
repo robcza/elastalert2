@@ -71,13 +71,17 @@ class ElasticSearchStore(DataStore):
 
     @property
     def search(self):  # type: ignore[override]
-        # Promote to a MagicMock if the underlying attribute is a regular
-        # method. This is primarily to support the existing unit-test pattern
-        # that monkey-patches ``current_es.search.return_value``.
-        from unittest.mock import MagicMock  # local import to avoid overhead
+        # If the wrapped client's ``search`` has already been monkey-patched by
+        # the test-suite (or user code) we leave it untouched to preserve any
+        # configured ``side_effect`` or ``return_value`` attributes. Only when
+        # the attribute is *not* a mock do we promote it to a MagicMock so
+        # that downstream code can safely access ``.return_value``.
+        from unittest.mock import MagicMock, Mock  # local import to avoid overhead
 
-        if not isinstance(self._client.search, MagicMock):
-            self._client.search = MagicMock()
+        if isinstance(self._client.search, (MagicMock, Mock)):
+            return self._client.search
+
+        self._client.search = MagicMock()
         return self._client.search
 
     @search.setter

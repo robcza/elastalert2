@@ -336,6 +336,30 @@ def elasticsearch_client(conf):
     return ElasticSearchClient(es_conn_conf)
 
 
+# ---------------------------------------------------------------------------
+# ClickHouse connectivity helper
+# ---------------------------------------------------------------------------
+
+
+def clickhouse_client(conf):  # noqa: D401
+    """Return a configured *clickhouse_driver.Client* instance.
+
+    The helper mirrors the behaviour of *elasticsearch_client* so that callers
+    only need to know which backend they target.
+    """
+    from clickhouse_driver import Client  # Local import to avoid hard dep if unused
+
+    return Client(
+        host=conf.get("ck_host", "localhost"),
+        port=conf.get("ck_port", 9000),
+        database=conf.get("ck_database", "default"),
+        user=conf.get("ck_user", "default"),
+        password=conf.get("ck_password", ""),
+        secure=conf.get("ck_secure", False),
+        verify=conf.get("ck_verify", False),
+    )
+
+
 def build_es_conn_config(conf):
     """ Given a conf dictionary w/ raw config properties 'use_ssl', 'es_host', 'es_port'
     'es_username' and 'es_password', this will return a new dictionary

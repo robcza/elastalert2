@@ -453,9 +453,9 @@ class ElastAlerter(object):
             len(hits)
         )
         if self.thread_data.total_hits > rule.get('max_query_size', self.max_query_size):
-            elastalert_logger.info("%s (scrolling..)" % status_log)
+            elastalert_logger.debug("%s (scrolling..)" % status_log)
         else:
-            elastalert_logger.info(status_log)
+            elastalert_logger.debug(status_log)
 
         hits = self.process_hits(rule, hits)
 
@@ -497,9 +497,9 @@ class ElastAlerter(object):
 
         self.thread_data.num_hits += res['count']
         lt = rule.get('use_local_time')
-        elastalert_logger.info(
+        elastalert_logger.debug(
             "Queried rule %s from %s to %s: %s hits" % (rule['name'], pretty_ts(starttime, lt, self.pretty_ts_format),
-                                                        pretty_ts(endtime, lt, self.pretty_ts_format), res['count'])
+                                                          pretty_ts(endtime, lt, self.pretty_ts_format), res['count'])
         )
         return {endtime: res['count']}
 
@@ -567,7 +567,7 @@ class ElastAlerter(object):
         buckets = res['aggregations']['counts']['buckets']
         self.thread_data.num_hits += len(buckets)
         lt = rule.get('use_local_time')
-        elastalert_logger.info(
+        elastalert_logger.debug(
             'Queried rule %s from %s to %s: %s buckets' % (
             rule['name'], pretty_ts(starttime, lt, self.pretty_ts_format),
             pretty_ts(endtime, lt, self.pretty_ts_format), len(buckets))
@@ -914,6 +914,8 @@ class ElastAlerter(object):
         while endtime - rule['starttime'] > segment_size:
             tmp_endtime = tmp_endtime + segment_size
             if not self.run_query(rule, rule['starttime'], tmp_endtime):
+                # Restore original starttime when query fails during segmented run
+                rule['starttime'] = rule['original_starttime']
                 return 0
             self.thread_data.cumulative_hits += self.thread_data.num_hits
             self.thread_data.num_hits = 0
@@ -923,6 +925,7 @@ class ElastAlerter(object):
         if rule.get('aggregation_query_element'):
             if endtime - tmp_endtime == segment_size:
                 if not self.run_query(rule, tmp_endtime, endtime):
+                    rule['starttime'] = rule['original_starttime']
                     return 0
                 self.thread_data.cumulative_hits += self.thread_data.num_hits
             elif total_seconds(rule['original_starttime'] - tmp_endtime) == 0:
@@ -932,6 +935,7 @@ class ElastAlerter(object):
                 endtime = tmp_endtime
         else:
             if not self.run_query(rule, rule['starttime'], endtime):
+                rule['starttime'] = rule['original_starttime']
                 return 0
             self.thread_data.cumulative_hits += self.thread_data.num_hits
             rule['type'].garbage_collect(endtime)

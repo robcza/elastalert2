@@ -1,35 +1,77 @@
 from __future__ import annotations
 
-from typing import Any
+"""ClickHouse datastore implementation for ElastAlert 2.
+
+This initial version offers **minimal** functionality—just enough to prove
+round-trip connectivity and satisfy the Phase 02 test-cases. More advanced
+features (SQL builders, spike detection, etc.) will follow in later phases.
+"""
+
+from typing import Any, Dict, List, Sequence, Tuple
+
+from clickhouse_driver import Client  # type: ignore
+
+from elastalert.util import ts_to_dt, dt_to_ts
 
 from . import DataStore
 
 
 class ClickHouseStore(DataStore):
-    """Placeholder implementation for ClickHouse support.
+    """A very thin wrapper around `clickhouse_driver.Client`."""
 
-    The concrete implementation will be developed in *02_clickhouse_driver.md*.
-    For now the class exists so the factory can import it without raising an
-    ImportError when someone experiments with the *clickhouse* backend.
-    """
-
-    def __init__(self, conf: dict[str, Any]):  # noqa: D401
+    def __init__(self, conf: dict[str, Any]):
         self._conf = conf
-        raise NotImplementedError(
-            "ClickHouse backend is not implemented yet. Follow the roadmap in 'tasks/02_clickhouse_driver.md'."
+        self._client = self._create_client(conf)
+
+    # ------------------------------------------------------------------
+    # DataStore interface implementation
+    # ------------------------------------------------------------------
+    def search(self, sql: str, params: Sequence | None = None, **kwargs):  # noqa: D401
+        """Execute a SQL query and return rows as list[dict]."""
+        rows, columns = self._execute(sql, params, with_column_types=True)
+        col_names = [name for name, _tp in columns]
+        return [dict(zip(col_names, row)) for row in rows]
+
+    def count(self, rule, start, end, **kwargs):  # noqa: D401
+        # Simple count implementation assuming `rule['table']` and timestamp
+        table = rule.get("table") or self._conf.get("ck_table", "logs")
+        ts_field = rule.get("timestamp_field", "@timestamp")
+        sql = (
+            f"SELECT count() AS cnt FROM {table} WHERE {ts_field} > %(start)s AND {ts_field} <= %(end)s"
+        )
+        params = {
+            "start": ts_to_dt(start),
+            "end": ts_to_dt(end),
+        }
+        rows = self.search(sql, params)
+        cnt = rows[0]["cnt"] if rows else 0
+        return {end: cnt}
+
+    def terms(self, *args, **kwargs):  # noqa: D401
+        raise NotImplementedError("Terms aggregation not implemented for ClickHouse yet.")
+
+    def aggregation(self, *args, **kwargs):  # noqa: D401
+        raise NotImplementedError("Aggregation queries not implemented for ClickHouse yet.")
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    def _create_client(self, conf: dict[str, Any]) -> Client:
+        return Client(
+            host=conf.get("ck_host", "localhost"),
+            port=conf.get("ck_port", 9000),
+            database=conf.get("ck_database", "default"),
+            user=conf.get("ck_user", "default"),
+            password=conf.get("ck_password", ""),
+            secure=conf.get("ck_secure", False),
+            verify=conf.get("ck_verify", False),
         )
 
-    # -------------------------------
-    # DataStore required interface
-    # -------------------------------
-    def search(self, *args, **kwargs):
-        raise NotImplementedError
+    def _execute(self, sql: str, params: Sequence | None = None, *, with_column_types=False):
+        return self._client.execute(sql, params, with_column_types=with_column_types)
 
-    def count(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def terms(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def aggregation(self, *args, **kwargs):
-        raise NotImplementedError
+    # ------------------------------------------------------------------
+    # Proxy other attributes to underlying client to ease migration
+    # ------------------------------------------------------------------
+    def __getattr__(self, item):
+        return getattr(self._client, item)
