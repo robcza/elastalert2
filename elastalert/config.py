@@ -11,21 +11,46 @@ from elastalert.util import elastalert_logger
 from elastalert.util import get_module
 from elastalert.yaml import read_yaml
 
-# Required global (config.yaml) configuration options
-required_globals = frozenset(['run_every', 'es_host', 'es_port', 'writeback_index', 'buffer_time'])
+# ---------------------------------------------------------------------------
+# Configuration validation
+# ---------------------------------------------------------------------------
 
-# Settings that can be derived from ENV variables
-env_settings = {'ES_USE_SSL': 'use_ssl',
-                'ES_BEARER': 'es_bearer',
-                'ES_PASSWORD': 'es_password',
-                'ES_USERNAME': 'es_username',
-                'ES_API_KEY': 'es_api_key',
-                'ES_HOST': 'es_host',
-                'ES_HOSTS': 'es_hosts',
-                'ES_PORT': 'es_port',
-                'ES_URL_PREFIX': 'es_url_prefix',
-                'STATSD_INSTANCE_TAG': 'statsd_instance_tag',
-                'STATSD_HOST': 'statsd_host'}
+# Global keys required for *all* backends
+base_required_globals = frozenset(['run_every', 'writeback_index', 'buffer_time'])
+
+# Backend-specific mandatory keys
+backend_requirements = {
+    'elasticsearch': frozenset(['es_host', 'es_port']),
+    'clickhouse': frozenset(['ck_host', 'ck_port']),
+}
+
+
+# Keep original constant for backward-compatibility in external imports
+required_globals = base_required_globals | backend_requirements['elasticsearch']
+
+# Environment variable → config-key mappings
+env_settings = {
+    # Elasticsearch
+    'ES_USE_SSL': 'use_ssl',
+    'ES_BEARER': 'es_bearer',
+    'ES_PASSWORD': 'es_password',
+    'ES_USERNAME': 'es_username',
+    'ES_API_KEY': 'es_api_key',
+    'ES_HOST': 'es_host',
+    'ES_HOSTS': 'es_hosts',
+    'ES_PORT': 'es_port',
+    'ES_URL_PREFIX': 'es_url_prefix',
+    # ClickHouse
+    'CK_HOST': 'ck_host',
+    'CK_PORT': 'ck_port',
+    'CK_DATABASE': 'ck_database',
+    'CK_USER': 'ck_user',
+    'CK_PASSWORD': 'ck_password',
+    'CK_SECURE': 'ck_secure',
+    # Misc
+    'STATSD_INSTANCE_TAG': 'statsd_instance_tag',
+    'STATSD_HOST': 'statsd_host',
+}
 
 env = Env(ES_USE_SSL=bool)
 
@@ -68,9 +93,18 @@ def load_conf(args, defaults=None, overrides=None):
     for key, value in (iter(overrides.items()) if overrides is not None else []):
         conf[key] = value
 
-    # Make sure we have all required globals
-    if required_globals - frozenset(list(conf.keys())):
-        raise EAException('%s must contain %s' % (filename, ', '.join(required_globals - frozenset(list(conf.keys())))))
+    # -------------------------------------------------------------------
+    # Backend selection & validation
+    # -------------------------------------------------------------------
+
+    backend = conf.get('backend', 'elasticsearch').lower()
+    if backend not in backend_requirements:
+        raise EAException(f"Unsupported backend '{backend}'. Valid options: {', '.join(backend_requirements.keys())}")
+
+    # Validate required keys
+    missing = (base_required_globals | backend_requirements[backend]) - frozenset(conf.keys())
+    if missing:
+        raise EAException('%s must contain %s' % (filename, ', '.join(sorted(missing))))
 
     conf.setdefault('max_query_size', 10000)
     conf.setdefault('scroll_keepalive', '30s')
