@@ -11,8 +11,9 @@ from typing import Any, Dict, List, Sequence, Tuple
 
 from clickhouse_driver import Client  # type: ignore
 
-from elastalert.util import ts_to_dt, dt_to_ts
+from elastalert.util import ts_to_dt
 
+from .sql_builders import build_count_query
 from . import DataStore
 
 
@@ -34,16 +35,8 @@ class ClickHouseStore(DataStore):
 
     def count(self, rule, start, end, **kwargs):  # noqa: D401
         # Simple count implementation assuming `rule['table']` and timestamp
-        table = rule.get("table") or self._conf.get("ck_table", "logs")
-        ts_field = rule.get("timestamp_field", "@timestamp")
-        sql = (
-            f"SELECT count() AS cnt FROM {table} WHERE {ts_field} > %(start)s AND {ts_field} <= %(end)s"
-        )
-        params = {
-            "start": ts_to_dt(start),
-            "end": ts_to_dt(end),
-        }
-        rows = self.search(sql, params)
+        sql = build_count_query(rule, ts_to_dt(start), ts_to_dt(end))
+        rows = self.search(sql)
         cnt = rows[0]["cnt"] if rows else 0
         return {end: cnt}
 
