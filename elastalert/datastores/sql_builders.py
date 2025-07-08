@@ -14,6 +14,8 @@ __all__ = [
     "build_filter_predicates",
     "build_frequency_query",
     "build_count_query",
+    "build_bucket_count_query",
+    "build_spike_queries",
 ]
 
 ISO_FMT = "%Y-%m-%d %H:%M:%S"
@@ -72,3 +74,38 @@ def build_frequency_query(rule: dict[str, Any], start: _dt.datetime, end: _dt.da
     """Return SQL that yields one row per event (no grouping). For frequency
     rules we only need *count* so this delegates to build_count_query."""
     return build_count_query(rule, start, end)
+
+
+# ---------------------------------------------------------------------------
+# Aggregated counts / buckets
+# ---------------------------------------------------------------------------
+
+
+def build_bucket_count_query(rule: dict[str, Any], start: _dt.datetime, end: _dt.datetime, bucket_seconds: int) -> str:
+    """Return SQL that counts rows grouped into fixed-size time buckets."""
+    table = rule.get("table") or rule.get("ck_table", "logs")
+    ts_field = rule.get("timestamp_field", "@timestamp")
+    where = [build_time_predicate(start, end, ts_field)]
+    extra = build_filter_predicates(rule.get("filter", []))
+    if extra:
+        where.append(extra)
+    where_clause = " AND ".join(where)
+    bucket_expr = f"toStartOfInterval({ts_field}, INTERVAL {bucket_seconds} SECOND) AS bucket"
+    return (
+        f"SELECT {bucket_expr}, count() AS cnt FROM {table} "
+        f"WHERE {where_clause} GROUP BY bucket ORDER BY bucket"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Spike detection helpers
+# ---------------------------------------------------------------------------
+
+
+def build_spike_queries(rule: dict[str, Any], cur_start: _dt.datetime, cur_end: _dt.datetime,
+                        ref_start: _dt.datetime, ref_end: _dt.datetime) -> dict[str, str]:
+    """Return two count queries for current and reference windows."""
+    return {
+        "current": build_count_query(rule, cur_start, cur_end),
+        "reference": build_count_query(rule, ref_start, ref_end),
+    }
