@@ -1,0 +1,12 @@
+version: '3.9'
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.3
+    container_name: elastalert_clickhouse
+    ports:
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "clickhouse-client --query 'SELECT 1'" ]
+      interval: 5s
+      timeout: 2s
+      retries: 5
