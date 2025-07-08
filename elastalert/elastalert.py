@@ -38,11 +38,33 @@ from elastalert.opensearch_external_url_formatter import create_opensearch_exter
 from elastalert.prometheus_wrapper import PrometheusWrapper
 from elastalert.ruletypes import FlatlineRule
 from elastalert.ruletypes import RuleType
-from elastalert.util import (add_keyword_postfix, cronite_datetime_to_timestamp, dt_to_ts, dt_to_unix, EAException,
-                             elastalert_logger, elasticsearch_client, format_index, lookup_es_key, parse_deadline,
-                             parse_duration, pretty_ts, replace_dots_in_field_names, seconds, set_es_key,
-                             should_scrolling_continue, total_seconds, ts_add, ts_now, ts_to_dt, unix_to_dt,
-                             ts_utc_to_tz)
+from elastalert.util import (
+    add_keyword_postfix,
+    cronite_datetime_to_timestamp,
+    dt_to_ts,
+    dt_to_unix,
+    EAException,
+    elastalert_logger,
+    elasticsearch_client,
+    format_index,
+    lookup_es_key,
+    parse_deadline,
+    parse_duration,
+    pretty_ts,
+    replace_dots_in_field_names,
+    seconds,
+    set_es_key,
+    should_scrolling_continue,
+    total_seconds,
+    ts_add,
+    ts_now,
+    ts_to_dt,
+    unix_to_dt,
+    ts_utc_to_tz,
+)
+
+# Pluggable datastore abstraction
+from elastalert.datastores.factory import get_store
 
 
 class ElastAlerter(object):
@@ -856,7 +878,10 @@ class ElastAlerter(object):
         :return: The number of matches that the rule produced.
         """
         run_start = time.time()
-        self.thread_data.current_es = self.get_elasticsearch_client(rule)
+        # Instantiate or reuse the datastore for this rule
+        self.thread_data.store = get_store(rule)
+        # Keep legacy alias for backward-compatibility with existing code/tests
+        self.thread_data.current_es = self.thread_data.store
 
         # If there are pending aggregate matches, try processing them
         for x in range(len(rule['agg_matches'])):
@@ -1576,7 +1601,8 @@ class ElastAlerter(object):
                     continue
 
                 # Set current_es for top_count_keys query
-                self.thread_data.current_es = elasticsearch_client(rule)
+                self.thread_data.store = get_store(rule)
+                self.thread_data.current_es = self.thread_data.store
 
                 # Send the alert unless it's a future alert
                 if ts_now() > ts_to_dt(alert_time):
