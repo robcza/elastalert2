@@ -172,3 +172,34 @@ Example usage and resulting formatted timestamps::
     (not set; default)                               -> '2021-08-16 21:38 JST'
     custom_pretty_ts_format: '%Y-%m-%d %H:%M %z'     -> '2021-08-16 21:38 +0900'
     custom_pretty_ts_format: '%Y-%m-%d %H:%M'        -> '2021-08-16 21:38'
+
+
+.. _clickhouse_config:
+
+ClickHouse Backend Options
+==========================
+
+The following global (or per–rule) settings configure ClickHouse connectivity
+when a rule specifies ``backend: clickhouse``.
+
+``ck_host``
+    Hostname of the ClickHouse server (native TCP protocol). Defaults to
+    ``localhost``.
+
+``ck_port``
+    TCP port for the native protocol. Defaults to ``9000``.
+
+``ck_username``
+    Username for authentication. Defaults to ``default``.
+
+``ck_password``
+    Password for ``ck_username``. Empty by default.
+
+``ck_database``
+    Default database to query. Defaults to ``passivedns``.
+
+``ck_table``
+    Name of the table holding events. Defaults to ``passivedns_v2``.
+
+These values can be specified at the top-level ``config.yaml`` to apply to all
+rules, or overridden per-rule alongside ``backend: clickhouse``.
