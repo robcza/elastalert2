@@ -367,3 +367,92 @@ Optionally, once a rule has been disabled it is safe to remove the rule file, if
 there is no intention of re-activating the rule. However, be aware that removing
 a rule file without first disabling it will _not_ disable the rule!
 
+
+.. _running_clickhouse:
+
+Running against ClickHouse
+==========================
+
+ElastAlert 2 can execute rules directly against a ClickHouse database as of
+**version 2.TBD.TBD**.  The overall workflow is identical to the Elasticsearch
+backend—simply point your rule at ClickHouse by setting ``backend:
+clickhouse`` and providing connection details.
+
+Quick-start with Docker Compose
+------------------------------
+
+A minimal Compose stack comprising ElastAlert 2 and ClickHouse looks like this:
+
+.. code-block:: yaml
+
+    version: "3"
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:23.4
+        ports:
+          - "9000:9000"   # native TCP protocol
+          - "8123:8123"   # optional HTTP interface
+        healthcheck:
+          test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1'"]
+          interval: 5s
+          retries: 5
+
+      elastalert:
+        image: ghcr.io/jertel/elastalert2/elastalert2:latest
+        volumes:
+          - ./config.yaml:/opt/elastalert/config.yaml
+          - ./rules:/opt/elastalert/rules
+        depends_on:
+          clickhouse:
+            condition: service_healthy
+
+Rule example
+------------
+
+.. code-block:: yaml
+
+    name: DNS passive frequency
+    backend: clickhouse
+    ck_host: clickhouse      # service name in Compose network
+    ck_database: passivedns
+    ck_table: passivedns_v2
+
+    type: frequency
+    num_events: 100
+    timeframe: minutes: 15
+
+    filter:
+      - query_string:
+          query: "query_type:A"
+
+    alert:
+      - debug
+
+The rule above counts rows in ``passivedns.passivedns_v2`` where
+``query_type = 'A'`` for a specific ``client_id`` (if supplied as a
+metadata field) within the last 15 minutes.
+
+Executed SQL
+~~~~~~~~~~~~
+
+ElastAlert 2 converts the rule into the following ClickHouse query (placeholders
+are bound via the native binary protocol):
+
+.. code-block:: sql
+
+    SELECT count() AS cnt
+    FROM passivedns.passivedns_v2
+    WHERE client_id = 'C1'
+      AND query_type = 'A'
+      AND timestamp BETWEEN '2025-01-01 12:00:00' AND '2025-01-01 12:15:00';
+
+If the count reaches the configured threshold (``num_events``) an alert is
+raised.
+
+Performance considerations
+-------------------------
+
+ClickHouse is designed for analytical workloads and scales well with high event
+rates. Ensure a suitable primary key on ``timestamp`` (as in the example table)
+and consider partitioning by date for very large datasets.
+

@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:23.4
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "clickhouse-client --query 'SELECT 1'" --health-interval 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y gcc libffi-dev
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-dev.txt
+      - name: Run tests
+        run: |
+          pytest --strict-markers --cov=elastalert --cov-branch --cov-report=term-missing --cov-fail-under=75
+      - name: Build docs
+        working-directory: docs
+        run: |
+          make html

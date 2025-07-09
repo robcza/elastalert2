@@ -12,3 +12,4 @@ The following documentation is available for additional topics for users looking
    elasticsearch_security_privileges
    recipes/exposing_rule_metrics
    recipes/signing_requests
+   datastore_abstraction
