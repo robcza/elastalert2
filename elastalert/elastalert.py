@@ -843,7 +843,16 @@ class ElastAlerter(object):
         key = rule['name']
         es_client = self.es_clients.get(key)
         if es_client is None:
-            es_client = elasticsearch_client(rule)
+            # Respect configurable backend
+            backend = rule.get('backend', rule.get('es_backend', 'elasticsearch')).lower()
+            if backend == 'clickhouse':
+                try:
+                    from elastalert.datastores import get_datastore
+                    es_client = get_datastore(rule)
+                except ImportError:
+                    raise
+            else:
+                es_client = elasticsearch_client(rule)
             self.es_clients[key] = es_client
         return es_client
 

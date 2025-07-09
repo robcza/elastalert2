@@ -79,6 +79,9 @@ def load_conf(args, defaults=None, overrides=None):
     conf.setdefault('scan_subdirectories', True)
     conf.setdefault('rules_loader', 'file')
     conf.setdefault('custom_pretty_ts_format', None)
+    # ClickHouse defaults — keep at top-level for rule/global references
+    conf.setdefault('ck_database', 'passivedns')
+    conf.setdefault('ck_table', 'passivedns_v2')
 
     # Convert run_every, buffer_time into a timedelta object
     try:
