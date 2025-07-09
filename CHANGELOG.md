@@ -5,6 +5,7 @@
 
 ## New features
 - Now supporting Elasticsearch 9 and OpenSearch 3 - [#1682](https://github.com/jertel/elastalert2/pull/1682) - @jertel
+- ClickHouse datastore backend with full support for Frequency & Spike rule types. Rules can now be executed against ClickHouse tables by simply setting `backend: clickhouse` and connection parameters. - @internal
 
 ## Other changes
 - Removed specific version requirement for Elastic Kibana and OpenSearch Discover - [#1682](https://github.com/jertel/elastalert2/pull/1682) - @jertel
