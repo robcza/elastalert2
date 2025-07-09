@@ -39,9 +39,9 @@ class ClickHouseStore(BaseDataStore):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _to_python(self, row: Tuple) -> Dict[str, Any]:
+    def _to_python(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """Convert raw ClickHouse *row* into dict compatible with ElastAlert."""
-        doc: Dict[str, Any] = dict(row)
+        doc = row.copy()
         # Alias to '@timestamp' for ElastAlert internal consumption
         ts_val = doc.get(self._ts_col)
         if ts_val is not None:
