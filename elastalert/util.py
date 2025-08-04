@@ -18,6 +18,7 @@ from elasticsearch.exceptions import TransportError
 logging.basicConfig()
 logging.captureWarnings(True)
 elastalert_logger = logging.getLogger('elastalert')
+elastalert_logger.setLevel(logging.INFO)
 
 
 def get_module(module_name):
@@ -315,7 +316,14 @@ def replace_dots_in_field_names(document):
 
 
 def elasticsearch_client(conf):
-    """ returns an :class:`ElasticSearchClient` instance configured using an es_conn_config """
+    """Returns a backend client (Elasticsearch by default, ClickHouse when requested)."""
+
+    # Early exit for ClickHouse backend so we don't rely on Elasticsearch specific configuration keys.
+    if conf.get('backend') == 'clickhouse' or conf.get('clickhouse_host'):
+        from elastalert.backends import ClickHouseClient
+        return ClickHouseClient(conf)
+
+    # Default: return Elasticsearch client
     es_conn_conf = build_es_conn_config(conf)
     auth = Auth()
     username = es_conn_conf['es_username']
