@@ -431,9 +431,9 @@ class ElastAlerter(object):
             len(hits)
         )
         if self.thread_data.total_hits > rule.get('max_query_size', self.max_query_size):
-            elastalert_logger.info("%s (scrolling..)" % status_log)
+            elastalert_logger.debug("%s (scrolling..)" % status_log)
         else:
-            elastalert_logger.info(status_log)
+            elastalert_logger.debug(status_log)
 
         hits = self.process_hits(rule, hits)
 
